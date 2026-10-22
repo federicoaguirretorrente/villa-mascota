@@ -12,7 +12,49 @@ Villa Mascota/
     ... (el resto de las imágenes)
 ```
 
-A continuación, 4 formas de dejarlo online, de la más rápida a la más "profesional". Con cualquiera de las 4 alcanza — elegí una.
+Hay dos maneras de pensar esto:
+
+- **Publicar una vez** (secciones "Opción 1-4" más abajo): subís la carpeta a mano cada vez que querés actualizar algo.
+- **Despliegue continuo** (sección siguiente, recomendada): lo conectamos una sola vez a GitHub + Netlify, y de ahí en adelante, cada vez que le pida a Claude "actualizá el juego online", Claude hace el cambio y lo publica solo — vos no volvés a tocar nada.
+
+---
+
+## Despliegue continuo (recomendado): GitHub + Netlify
+
+Esto se configura **una sola vez**. Después, cualquier actualización que le pidas a Claude queda online en 1-2 minutos sin que vos tengas que subir nada a mano.
+
+### Paso 1 — Creá tu cuenta de GitHub (gratis)
+1. Entrá a **https://github.com/signup** y creá una cuenta (con tu email).
+2. Confirmá el email que te manden.
+
+### Paso 2 — Creá un repositorio vacío
+1. Entrá a **https://github.com/new**
+2. Nombre del repositorio: `villa-mascota` (o el que prefieras).
+3. Dejalo en **Public** (Netlify gratis lo necesita público, o Private si tenés plan pago — Public está bien para esto).
+4. **No** marques "Add a README" ni ningún otro archivo inicial — tiene que quedar completamente vacío.
+5. Click en **"Create repository"**.
+6. En la pantalla que aparece, copiá la URL que te muestra arriba, algo como:
+   `https://github.com/tu-usuario/villa-mascota.git`
+7. **Pegame esa URL en el chat** — con eso yo conecto el proyecto y subo el código por vos.
+
+### Paso 3 — Conectá ese repositorio con Netlify (para que publique solo)
+1. Creá una cuenta gratis en **https://app.netlify.com/signup** — podés elegir "Sign up with GitHub" para que quede todo conectado de una.
+2. Click en **"Add new site" → "Import an existing project"**.
+3. Elegí **GitHub**, autorizá el acceso si te lo pide, y seleccioná el repositorio `villa-mascota` que creaste.
+4. Dejá la configuración por defecto (no hace falta build command ni carpeta especial, es un sitio estático) y click en **"Deploy site"**.
+5. Netlify te da un link fijo como `https://villa-mascota-tuusuario.netlify.app`. Ese es el link definitivo para compartir.
+
+### Listo — ¿cómo sigue de acá en adelante?
+Una vez hecho esto, cada vez que quieras un cambio en el juego, simplemente pedímelo en el chat (por ejemplo "subí esta actualización" o "dejalo en productivo"), y yo:
+1. Hago el cambio en `index.html`.
+2. Subo el cambio al repositorio de GitHub (`git push`).
+3. Netlify detecta el push y publica la nueva versión automáticamente — sin que tengas que entrar a ningún lado.
+
+---
+
+## Publicación manual (si preferís subir vos mismo cada vez)
+
+4 formas de dejarlo online sin despliegue automático, de la más rápida a la más "profesional". Con cualquiera de las 4 alcanza — elegí una.
 
 ---
 
