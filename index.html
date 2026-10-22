@@ -571,6 +571,7 @@ const ITEMS={
   hat_tophat:{n:'Galera',e:'🎩',t:'cloth',slot:'hat',shop:'cloth',p:220},
   hat_crown:{n:'Corona',e:'👑',t:'cloth',slot:'hat',shop:'cloth',c:8},
   hat_flower:{n:'Corona de flores',e:'🌼',t:'cloth',slot:'hat',p:600},
+  hat_headset:{n:'Diadema de micrófono',e:'🎧',t:'cloth',slot:'hat',shop:'cloth',c:7},
   face_glasses:{n:'Lentes redondos',e:'👓',t:'cloth',slot:'face',shop:'cloth',p:90},
   face_heart:{n:'Gafas de corazón',e:'💗',t:'cloth',slot:'face',shop:'cloth',p:130},
   body_overall:{n:'Overol',e:'👖',t:'cloth',slot:'body',shop:'cloth',p:180},
@@ -578,6 +579,7 @@ const ITEMS={
   body_tshirt:{n:'Camiseta estrella',e:'👕',t:'cloth',slot:'body',shop:'cloth',p:100},
   body_scarf:{n:'Bufanda',e:'🧣',t:'cloth',slot:'body',shop:'cloth',p:90},
   body_princess:{n:'Vestido de princesa',e:'👸',t:'cloth',slot:'body',p:700},
+  body_kpop:{n:'Traje de estrella pop',e:'🎤',t:'cloth',slot:'body',shop:'cloth',c:9},
   back_cape:{n:'Capa roja',e:'🦸',t:'cloth',slot:'back',shop:'cloth',p:160},
   back_wings:{n:'Alas de ángel',e:'🕊️',t:'cloth',slot:'back',shop:'cloth',c:10},
   mystery:{n:'Caja misteriosa',e:'🎁',t:'special',shop:'cloth',c:5},
@@ -958,6 +960,10 @@ function hatSVG(h){
       const pts=[[38,66],[52,48],[74,37],[100,33],[126,37],[148,48],[162,66]];
       return pts.map(([x,y],i)=>{const c=i%2?'#ffd6e4':'#fff';return `<g transform="translate(${x} ${y})">${[0,72,144,216,288].map(a=>`<circle cx="${(Math.cos(a*Math.PI/180)*7).toFixed(1)}" cy="${(Math.sin(a*Math.PI/180)*7).toFixed(1)}" r="6.5" fill="${c}" stroke="#d9b8c4" stroke-width="1.5"/>`).join('')}<circle r="4.5" fill="#ffcf3a"/></g>`;}).join('');
     }
+    case 'hat_headset':return `<path d="M54 30 Q58 -8 100 -10 Q142 -8 146 30" fill="none" stroke="#2d2a32" stroke-width="7" stroke-linecap="round"/>
+      <rect x="44" y="24" width="16" height="22" rx="7" fill="#2d2a32"/><rect x="140" y="24" width="16" height="22" rx="7" fill="#2d2a32"/>
+      <path d="M100 -4 Q96 16 94 32" fill="none" stroke="#2d2a32" stroke-width="3" stroke-linecap="round"/>
+      <path d="M86 36 L96 30 L92 38 L102 34 L92 46 L94 38Z" fill="#ffd23f" stroke="#c48a0c" stroke-width="2" stroke-linejoin="round"/>`;
   }
   return '';
 }
@@ -973,6 +979,13 @@ function bodySVG(b){
     case 'body_tshirt':return `<path d="M64 170 Q100 154 136 170 L137 212 Q100 220 63 212Z" fill="#5aa9e6" stroke="#2f6fa8" stroke-width="3.5"/><path d="M100 174 l5 10 11 1-8 7 3 11-11-6-11 6 3-11-8-7 11-1z" fill="#ffe066"/>`;
     case 'body_scarf':return `<path d="M62 160 Q100 178 138 160 L138 174 Q100 192 62 174Z" fill="#e2453c" stroke="#9e2a23" stroke-width="3"/><path d="M116 178 L128 212 L114 214 L106 182Z" fill="#e2453c" stroke="#9e2a23" stroke-width="3"/><path d="M70 168 L70 178 M84 172 L84 182" stroke="#ffd0cc" stroke-width="3"/>`;
     case 'body_princess':return `<path d="M74 160 Q100 152 126 160 L152 226 Q100 242 48 226Z" fill="#cfe6ff" stroke="#7aa7d9" stroke-width="3.5"/><path d="M50 222 Q62 232 74 224 Q86 234 100 226 Q114 234 126 224 Q138 232 150 222" fill="none" stroke="#fff" stroke-width="5"/><path d="M80 176 Q100 186 120 176" fill="none" stroke="#fff" stroke-width="4"/><circle cx="100" cy="170" r="6" fill="#ffd23f" stroke="#c48a0c" stroke-width="2"/>`;
+    case 'body_kpop':return `<path d="M70 158 Q100 148 130 158 L134 196 L66 196Z" fill="#7a1f2b" stroke="#3d0f17" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M58 168 Q50 160 56 150 L66 162Z" fill="#7a1f2b" stroke="#3d0f17" stroke-width="3"/><path d="M142 168 Q150 160 144 150 L134 162Z" fill="#7a1f2b" stroke="#3d0f17" stroke-width="3"/>
+      <path d="M66 196 Q100 210 134 196 L148 228 Q100 244 52 228Z" fill="#8f2634" stroke="#3d0f17" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M70 158 Q62 150 54 156" fill="none" stroke="#e8c26a" stroke-width="4" stroke-linecap="round"/><path d="M130 158 Q138 150 146 156" fill="none" stroke="#e8c26a" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="100" cy="168" r="3" fill="#e8c26a"/><circle cx="100" cy="179" r="3" fill="#e8c26a"/><circle cx="100" cy="190" r="3" fill="#e8c26a"/>
+      <path d="M90 158 Q100 166 110 158" fill="none" stroke="#e8c26a" stroke-width="2.5"/>
+      <g fill="#fdf1d8" opacity=".85"><circle cx="68" cy="216" r="2"/><circle cx="132" cy="216" r="2"/><circle cx="84" cy="230" r="2"/><circle cx="116" cy="230" r="2"/><circle cx="100" cy="238" r="2"/></g>`;
   }
   return '';
 }
