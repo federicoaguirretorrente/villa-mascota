@@ -455,6 +455,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .visitui{position:absolute;right:calc(var(--u)*1.5);bottom:calc(var(--u)*1.5);display:flex;gap:calc(var(--u)*1);z-index:900}
 .nbrow{display:flex;align-items:center;gap:calc(var(--u)*1.2);padding:calc(var(--u)*.6);border:calc(var(--u)*.3) solid #cfe5f6;border-radius:calc(var(--u)*1.4);margin-bottom:calc(var(--u)*.8);background:#fff}
 .nbrow .av{width:calc(var(--u)*7)}
+.nbrow .av.fav{display:flex;align-items:center;justify-content:center;height:calc(var(--u)*7);font-size:calc(var(--u)*4);background:#eef7fe;border-radius:50%}
 .nbrow .txt{flex:1}
 .nbrow .txt b{display:block;font-size:calc(var(--u)*1.9)}
 
@@ -477,6 +478,14 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .traylist .card .sw{width:calc(var(--u)*5);height:calc(var(--u)*3.2)}
 .trayside{display:flex;flex-direction:column;gap:calc(var(--u)*.6)}
 .empty{padding:calc(var(--u)*1);color:#8b7461;font-weight:700}
+.nbsection{margin-bottom:calc(var(--u)*1.8)}
+.nbsection h3{color:#3e6fa0;font-size:calc(var(--u)*1.8);margin:0 0 calc(var(--u)*.8)}
+.codebox{display:flex;align-items:center;gap:calc(var(--u)*.8);flex-wrap:wrap;background:#eef7fe;border:calc(var(--u)*.3) solid #bfdcf3;
+  border-radius:calc(var(--u)*1.3);padding:calc(var(--u)*.9) calc(var(--u)*1.1);margin-bottom:calc(var(--u)*.8)}
+.codebox b{font-size:calc(var(--u)*1.9);letter-spacing:calc(var(--u)*.2);color:#3e6fa0}
+.addfriend{display:flex;gap:calc(var(--u)*.6);margin-bottom:calc(var(--u)*.8)}
+.addfriend input{flex:1;min-width:0;font:inherit;font-size:calc(var(--u)*1.6);font-weight:800;color:#4a3324;text-transform:uppercase;
+  border:calc(var(--u)*.3) solid #9cc9ee;border-radius:calc(var(--u)*1.2);padding:calc(var(--u)*.4) calc(var(--u)*1);background:#fff;letter-spacing:calc(var(--u)*.2)}
 
 /* ---------- Collection ---------- */
 .fishgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*12),1fr));gap:calc(var(--u)*1)}
@@ -491,6 +500,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 }
 </style>
 <div id="app"><div id="stage" role="application" aria-label="Villa Mascota, juego de mascota virtual"></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 'use strict';
 /* =========================================================
@@ -627,6 +639,58 @@ const NEIGHBORS=[
    furn:[{id:'planta',x:12,y:72},{id:'planta',x:88,y:72},{id:'girasol',x:70,y:82},{id:'silla',x:24,y:84},{id:'tv',x:80,y:40}],hi:'¡Hola! ¿Viste mis girasoles?'},
 ];
 const MYSTERY=['hat_crown','hat_flower','back_wings','body_princess','unicornio','castillo','carrusel','arbolito','trofeo','coins'];
+
+/* ---------------- AMIGOS (visitas en vivo vía Firebase) ---------------- */
+// Pegá acá la config de TU proyecto Firebase (ver DEPLOY.md). No es secreta:
+// la config web de Firebase está pensada para ser pública; lo que protege
+// los datos son las reglas de seguridad de Firestore, no ocultar esta config.
+const FIREBASE_CONFIG={apiKey:"TU_API_KEY",authDomain:"TU_PROYECTO.firebaseapp.com",projectId:"TU_PROYECTO",storageBucket:"TU_PROYECTO.appspot.com",messagingSenderId:"TU_SENDER_ID",appId:"TU_APP_ID"};
+let fbReady=false,fbAuthUid=null,friendCache={},syncTimer=null;
+function fbInit(){
+  if(fbReady||typeof firebase==='undefined')return fbReady;
+  try{firebase.initializeApp(FIREBASE_CONFIG);fbReady=true;}catch(e){console.warn('Firebase no disponible',e);}
+  return fbReady;
+}
+async function fbAuth(){
+  if(!fbInit())return null;
+  if(fbAuthUid)return fbAuthUid;
+  try{const cred=await firebase.auth().signInAnonymously();fbAuthUid=cred.user.uid;return fbAuthUid;}
+  catch(e){console.warn('No se pudo iniciar sesión anónima',e);return null;}
+}
+function genFriendCode(){const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=ch[Math.floor(Math.random()*ch.length)];return s;}
+async function ensureFriendCode(){
+  if(S.friendCode)return S.friendCode;
+  const uid=await fbAuth();if(!uid)return null;
+  const db=firebase.firestore();let code=null;
+  for(let i=0;i<6;i++){
+    const c=genFriendCode();
+    try{const snap=await db.collection('players').doc(c).get();if(!snap.exists){code=c;break;}}catch(e){console.warn('No se pudo verificar el código',e);return null;}
+  }
+  if(!code)return null;
+  S.friendCode=code;save();
+  await syncMyHouse();
+  return code;
+}
+function scheduleSync(){
+  if(!S.friendCode)return;
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(syncMyHouse,2500);
+}
+async function syncMyHouse(){
+  if(!S.friendCode)return;
+  const uid=await fbAuth();if(!uid)return;
+  try{
+    await firebase.firestore().collection('players').doc(S.friendCode).set({
+      uid,name:S.pet.name,level:S.level,pet:S.pet,outfit:S.outfit,wall:S.wall,floor:S.floor,placed:S.placed,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){console.warn('No se pudo sincronizar la casa',e);}
+}
+async function fetchFriend(code){
+  if(!fbInit())return null;
+  try{const snap=await firebase.firestore().collection('players').doc(code).get();return snap.exists?snap.data():null;}
+  catch(e){console.warn('No se pudo buscar ese código',e);return null;}
+}
 
 /* ---------------- ITEM ICONS (ilustraciones vectoriales) ---------------- */
 // Reemplaza emojis por SVG dibujado a mano, en el mismo estilo "cartoon sombreado" que la mascota.
@@ -887,7 +951,8 @@ function newState(){return{
   placed:[{id:'sofa',uid:1,x:remapToWideHouse(79),y:74},{id:'planta',uid:2,x:remapToWideHouse(13),y:68},{id:'cuadro',uid:3,x:remapToWideHouse(27),y:35}],
   wall:'wall_cream',floor:'floor_check',kwall:'wall_tile',kfloor:'floor_check',owned:['wall_cream','floor_check','wall_tile'],
   poops:[],pendingPoops:[],garden:Array.from({length:6},()=>({seed:null,water:false,ready:0})),
-  fishLog:{},visits:{},lastDaily:'',lastTick:Date.now(),uid:10,sound:true,wins:0,achieve:{}
+  fishLog:{},visits:{},lastDaily:'',lastTick:Date.now(),uid:10,sound:true,wins:0,achieve:{},
+  friendCode:null,friends:[]
 };}
 let S;
 function load(){
@@ -896,7 +961,7 @@ function load(){
     return;}}catch(e){}
   S=newState();
 }
-function save(){try{S.lastTick=Date.now();localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){}}
+function save(){try{S.lastTick=Date.now();localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){}scheduleSync();}
 function offlineDecay(){
   const mins=Math.min((Date.now()-(S.lastTick||Date.now()))/60000,720);
   if(mins>0.2){const d=(r)=>Math.min(r*mins,45);
@@ -1978,15 +2043,27 @@ function showOlympicsSummary(){
 }
 
 /* ---------------- VISIT ---------------- */
-function visitHTML(){
+function currentVisit(){
+  if(visitId&&visitId.startsWith('friend:')){
+    const code=visitId.slice(7),d=friendCache[code];if(!d)return null;
+    return {id:visitId,name:d.name||'Amigo',lvl:d.level||1,look:d.pet||{},outfit:d.outfit||{},wall:d.wall||'wall_cream',floor:d.floor||'floor_check',
+      furn:d.placed||[],hi:'¡Hola! Bienvenido a mi casa',isFriend:true};
+  }
   const nb=NEIGHBORS.find(n=>n.id===visitId);
+  return nb?{...nb,isFriend:false}:null;
+}
+function visitHTML(){
+  const nb=currentVisit();
+  if(!nb)return `<div class="empty">No pudimos cargar esta casa.</div><div class="raceexit"><button class="dbtn" data-act="go" data-arg="map"><span class="rbtn">${dic('mapa')}</span><em>Mapa</em></button></div>`;
   return roomHTML(nb.wall,nb.floor,nb.furn,false,false)+petHTML('npc',nb.look,nb.outfit,nb.name,nb.lvl,'static')+petHTML()+
-    `<div class="visitui"><button class="btn" data-act="greet">👋 Saludar</button><button class="btn gold" data-act="giftNb">🎁 Dejar regalo</button></div>`;
+    `<div class="visitui"><button class="btn" data-act="greet">👋 Saludar</button>${nb.isFriend?'':'<button class="btn gold" data-act="giftNb">🎁 Dejar regalo</button>'}</div>`;
 }
 function visitEnter(){
-  const nb=NEIGHBORS.find(n=>n.id===visitId);const n=$('#npc');
+  const nb=currentVisit();if(!nb)return;
+  const n=$('#npc');
   if(n){n.style.left='68%';n.style.top='80%';n.style.zIndex=860;}
   later(()=>say(nb.hi,'npc',3200),400);
+  if(nb.isFriend)return;
   const v=S.visits[nb.id]||{};
   if(v.day!==todayStr()){
     S.visits[nb.id]={day:todayStr(),gift:false};
@@ -2002,6 +2079,7 @@ function modal(title,html){
   o.innerHTML=`<div class="modalbg" data-act="closeBg"><div class="modal panel" role="dialog" aria-label="${esc(title)}"><button class="x rbtn red sm" data-act="close" aria-label="Cerrar">✕</button>${title?`<h2>${title}</h2>`:''}<div class="mbody">${html}</div></div></div>`;
 }
 function closeModal(){const o=$('#overlay');if(o)o.innerHTML='';}
+function refreshNeighborsModal(){const b=$('.mbody');if(b)b.innerHTML=neighborsHTML();}
 const INVTABS=[['food','Comida'],['furn','Muebles'],['cloth','Ropa'],['seed','Semillas'],['fish','Peces']];
 function invHTML(){
   const ids=Object.keys(S.inv).filter(k=>S.inv[k]>0&&ITEMS[k]&&ITEMS[k].t===invTab);
@@ -2034,9 +2112,18 @@ function collectionHTML(){
     <div class="mbtns"><button class="btn" data-act="go" data-arg="fish">Ir a pescar</button></div>`;
 }
 function neighborsHTML(){
-  return NEIGHBORS.map(nb=>{const v=S.visits[nb.id];const done=v&&v.day===todayStr();
+  const mine=S.friendCode
+    ?`<div class="codebox"><span class="muted">Tu código:</span> <b>${S.friendCode}</b><button class="btn sm" data-act="copyCode">Copiar</button></div>`
+    :`<div class="codebox"><span class="muted">Generá un código para que tus amigos puedan visitarte.</span><button class="btn gold sm" data-act="getCode">Generar mi código</button></div>`;
+  const addRow=`<div class="addfriend"><input id="friendcodeinput" maxlength="6" placeholder="CÓDIGO"><button class="btn green sm" data-act="addFriendGo">Agregar amigo</button></div>`;
+  const friends=(S.friends||[]).length
+    ?S.friends.map(f=>`<div class="nbrow"><div class="av fav">👤</div><div class="txt"><b>${esc(f.name)}</b><span class="muted">Código ${f.code}</span></div>
+      <button class="btn green" data-act="visitFriend" data-arg="${f.code}">Visitar</button></div>`).join('')
+    :`<div class="empty">Todavía no agregaste amigos.</div>`;
+  const nbs=NEIGHBORS.map(nb=>{const v=S.visits[nb.id];const done=v&&v.day===todayStr();
     return `<div class="nbrow"><div class="av">${petSVG(nb.look,nb.outfit,{mood:'happy'})}</div><div class="txt"><b>${nb.name}</b><span class="muted">Nivel ${nb.lvl}. ${done?'Ya la visitaste hoy':'Visita diaria disponible: +25 🪙'}</span></div>
       <button class="btn green" data-act="visit" data-arg="${nb.id}">Visitar</button></div>`;}).join('');
+  return `<div class="nbsection"><h3>Tus amigos</h3>${mine}${addRow}${friends}</div><div class="nbsection"><h3>Vecinos</h3>${nbs}</div>`;
 }
 
 /* ---------------- PET ACTIONS ---------------- */
@@ -2243,6 +2330,25 @@ const A={
   toastPick:a=>{closeModal();snd('pop');say('¡Tostadas calentitas!');later(()=>eat(a,false),400);},
   // neighbors
   neighbors:()=>modal('Vecinos',neighborsHTML()),
+  getCode:async()=>{toast('Generando tu código…');const c=await ensureFriendCode();refreshNeighborsModal();toast(c?`¡Tu código es ${c}!`:'No se pudo generar el código. Probá de nuevo.');},
+  copyCode:()=>{if(!S.friendCode)return;(navigator.clipboard?.writeText(S.friendCode)||Promise.reject()).then(()=>toast('Código copiado')).catch(()=>toast('Tu código: '+S.friendCode));},
+  addFriendGo:async()=>{
+    const inp=$('#friendcodeinput');const code=(inp?.value||'').trim().toUpperCase();
+    if(!code){toast('Escribí un código primero');return;}
+    if(code===S.friendCode){toast('Ese es tu propio código');return;}
+    if((S.friends||[]).some(f=>f.code===code)){toast('Ya es tu amigo');return;}
+    toast('Buscando…');
+    const d=await fetchFriend(code);
+    if(!d){toast('No encontramos ese código');return;}
+    S.friends=S.friends||[];S.friends.push({code,name:d.name||'Amigo'});save();
+    refreshNeighborsModal();toast(`¡Agregaste a ${d.name||'tu amigo'}!`);
+  },
+  visitFriend:async(code)=>{
+    toast('Entrando a la casa…');
+    const d=await fetchFriend(code);
+    if(!d){toast('No pudimos cargar esa casa ahora. Probá más tarde.');return;}
+    friendCache[code]=d;closeModal();visitId='friend:'+code;go('visit:friend:'+code);
+  },
   visit:a=>{visitId=a;closeModal();go('visit:'+a);},
   greet:()=>{const nb=NEIGHBORS.find(n=>n.id===visitId);snd('pet');petTheP();say(pick(['¡Hola!','¡Qué lindo verte!','¿Cómo estás?']),'pet',2000);
     later(()=>{say(pick(['¡Hola, '+S.pet.name+'!','¡Me encanta tu ropa!','¡Ven cuando quieras!']),'npc',2400);floatAtPet('💕','npc');},900);},
