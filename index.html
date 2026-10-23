@@ -658,18 +658,27 @@ async function fbAuth(){
   catch(e){console.warn('No se pudo iniciar sesión anónima',e);return null;}
 }
 function genFriendCode(){const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=ch[Math.floor(Math.random()*ch.length)];return s;}
-async function ensureFriendCode(){
-  if(S.friendCode)return S.friendCode;
-  const uid=await fbAuth();if(!uid)return null;
-  const db=firebase.firestore();let code=null;
-  for(let i=0;i<6;i++){
-    const c=genFriendCode();
-    try{const snap=await db.collection('players').doc(c).get();if(!snap.exists){code=c;break;}}catch(e){console.warn('No se pudo verificar el código',e);return null;}
-  }
-  if(!code)return null;
-  S.friendCode=code;save();
-  await syncMyHouse();
-  return code;
+let friendCodeInFlight=null;
+// Una vez asignado, S.friendCode queda fijo para siempre (se guarda en localStorage).
+// El candado friendCodeInFlight evita que dos clicks rápidos generen dos códigos distintos.
+function ensureFriendCode(){
+  if(S.friendCode)return Promise.resolve(S.friendCode);
+  if(friendCodeInFlight)return friendCodeInFlight;
+  friendCodeInFlight=(async()=>{
+    const uid=await fbAuth();if(!uid){friendCodeInFlight=null;return null;}
+    if(S.friendCode)return S.friendCode;
+    const db=firebase.firestore();let code=null;
+    for(let i=0;i<6;i++){
+      const c=genFriendCode();
+      try{const snap=await db.collection('players').doc(c).get();if(!snap.exists){code=c;break;}}catch(e){console.warn('No se pudo verificar el código',e);friendCodeInFlight=null;return null;}
+    }
+    friendCodeInFlight=null;
+    if(!code)return null;
+    S.friendCode=code;save();
+    await syncMyHouse();
+    return code;
+  })();
+  return friendCodeInFlight;
 }
 function scheduleSync(){
   if(!S.friendCode)return;
