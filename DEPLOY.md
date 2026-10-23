@@ -1,5 +1,34 @@
 # Cómo publicar Villa Mascota online
 
+## Visitas a amigos reales (Firebase) — configuración única
+
+Desde que se agregó "Visitar amigos" con código, el juego necesita un proyecto
+gratuito de Firebase para guardar/leer las casas en vivo (sin esto, el botón
+"Generar mi código" falla con un aviso, pero el resto del juego sigue
+funcionando normal). Se configura **una sola vez**:
+
+1. Entrá a **https://console.firebase.google.com/**, click en "Agregar proyecto" (o "Add project"), ponele un nombre (ej. `villa-mascota`), podés desactivar Google Analytics (no hace falta), y creá el proyecto.
+2. Dentro del proyecto, click en el ícono **`</>`** ("Web") para registrar una app web. Ponele un apodo y continuá. Te va a mostrar un objeto `firebaseConfig` con 6 campos (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) — **copiá ese objeto completo y pegámelo en el chat**. No es información secreta: la config web de Firebase está pensada para ser pública, lo que protege los datos son las reglas de seguridad (paso 4), no ocultar esto.
+3. En el menú lateral: **Build → Authentication → Comenzar (Get started)**, pestaña "Sign-in method", y activá el proveedor **"Anónimo" (Anonymous)**. Esto deja que cada jugador tenga una identidad sin pedirle registrarse con email/contraseña.
+4. **Build → Firestore Database → Crear base de datos**. Elegí cualquier ubicación, modo producción. Una vez creada, andá a la pestaña **"Reglas" (Rules)** y reemplazá todo el contenido por esto:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /players/{code} {
+         allow read: if true;
+         allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+         allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+         allow delete: if false;
+       }
+     }
+   }
+   ```
+   Click en **"Publicar" (Publish)**.
+5. Pasame el `firebaseConfig` del paso 2 acá en el chat. Yo lo pego en el código, hago el `git push`, y Netlify lo publica — quedando las visitas a amigos funcionando en vivo.
+
+---
+
 Tu juego es **un sitio 100% estático**: un solo archivo `index.html` + la carpeta `assets/` con las imágenes. No necesita servidor, base de datos ni instalación — cualquier hosting de archivos estáticos sirve. Los datos de cada jugador (mascota, monedas, progreso) se guardan en el navegador de esa persona (`localStorage`), no en un servidor.
 
 Antes de subir, confirmá que tenés estos dos elementos juntos en una misma carpeta:
