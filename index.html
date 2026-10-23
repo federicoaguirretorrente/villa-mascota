@@ -2126,13 +2126,22 @@ function neighborsHTML(){
     :`<div class="codebox"><span class="muted">Generá un código para que tus amigos puedan visitarte.</span><button class="btn gold sm" data-act="getCode">Generar mi código</button></div>`;
   const addRow=`<div class="addfriend"><input id="friendcodeinput" maxlength="6" placeholder="CÓDIGO"><button class="btn green sm" data-act="addFriendGo">Agregar amigo</button></div>`;
   const friends=(S.friends||[]).length
-    ?S.friends.map(f=>`<div class="nbrow"><div class="av fav">👤</div><div class="txt"><b>${esc(f.name)}</b><span class="muted">Código ${f.code}</span></div>
+    ?S.friends.map(f=>`<div class="nbrow"><div class="av${f.look?'':' fav'}">${f.look?petSVG(f.look,f.outfit||{},{mood:'happy'}):'👤'}</div><div class="txt"><b>${esc(f.name)}</b><span class="muted">${f.lvl?`Nivel ${f.lvl}. `:''}Código ${f.code}</span></div>
       <button class="btn green" data-act="visitFriend" data-arg="${f.code}">Visitar</button></div>`).join('')
     :`<div class="empty">Todavía no agregaste amigos.</div>`;
   const nbs=NEIGHBORS.map(nb=>{const v=S.visits[nb.id];const done=v&&v.day===todayStr();
     return `<div class="nbrow"><div class="av">${petSVG(nb.look,nb.outfit,{mood:'happy'})}</div><div class="txt"><b>${nb.name}</b><span class="muted">Nivel ${nb.lvl}. ${done?'Ya la visitaste hoy':'Visita diaria disponible: +25 🪙'}</span></div>
       <button class="btn green" data-act="visit" data-arg="${nb.id}">Visitar</button></div>`;}).join('');
-  return `<div class="nbsection"><h3>Tus amigos</h3>${mine}${addRow}${friends}</div><div class="nbsection"><h3>Vecinos</h3>${nbs}</div>`;
+  return `<div class="nbsection"><h3>Amigos</h3>${mine}${addRow}${friends}</div><div class="nbsection"><h3>Vecinos</h3>${nbs}</div>`;
+}
+async function refreshFriendsAvatars(){
+  if(!(S.friends||[]).length)return;
+  let changed=false;
+  for(const f of S.friends){
+    const d=await fetchFriend(f.code);
+    if(d){f.name=d.name||f.name;f.look=d.pet||f.look;f.outfit=d.outfit||f.outfit;f.lvl=d.level||f.lvl;changed=true;}
+  }
+  if(changed){save();refreshNeighborsModal();}
 }
 
 /* ---------------- PET ACTIONS ---------------- */
@@ -2338,7 +2347,7 @@ const A={
   useToaster:()=>modal('Tostadora',`<p>¿Qué le agregás a la tostada de ${esc(S.pet.name)}?</p><div class="grid">${TOAST_OPTIONS.map(([k,n])=>`<button class="card" data-act="toastPick" data-arg="${k}"><span class="em">${itemIcon(k)}</span><span class="nm">${n}</span></button>`).join('')}</div>`),
   toastPick:a=>{closeModal();snd('pop');say('¡Tostadas calentitas!');later(()=>eat(a,false),400);},
   // neighbors
-  neighbors:()=>modal('Vecinos',neighborsHTML()),
+  neighbors:()=>{modal('Vecinos',neighborsHTML());refreshFriendsAvatars();},
   getCode:async()=>{toast('Generando tu código…');const c=await ensureFriendCode();refreshNeighborsModal();toast(c?`¡Tu código es ${c}!`:'No se pudo generar el código. Probá de nuevo.');},
   copyCode:()=>{if(!S.friendCode)return;(navigator.clipboard?.writeText(S.friendCode)||Promise.reject()).then(()=>toast('Código copiado')).catch(()=>toast('Tu código: '+S.friendCode));},
   addFriendGo:async()=>{
@@ -2349,7 +2358,7 @@ const A={
     toast('Buscando…');
     const d=await fetchFriend(code);
     if(!d){toast('No encontramos ese código');return;}
-    S.friends=S.friends||[];S.friends.push({code,name:d.name||'Amigo'});save();
+    S.friends=S.friends||[];S.friends.push({code,name:d.name||'Amigo',look:d.pet,outfit:d.outfit,lvl:d.level});save();
     refreshNeighborsModal();toast(`¡Agregaste a ${d.name||'tu amigo'}!`);
   },
   visitFriend:async(code)=>{
