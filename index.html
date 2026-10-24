@@ -132,7 +132,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .furn{position:absolute;transform:translate(-50%,-100%);line-height:1;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18));padding:calc(var(--u)*.2)}
 .icowrap{display:inline-block;width:1em;height:1em;line-height:1;vertical-align:-0.08em}
 .icowrap svg{display:block;width:100%;height:100%;overflow:visible}
-.icowrap img{display:block;width:100%;height:100%;object-fit:contain}
+.icowrap img{display:block;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .clawhook{position:absolute;width:16%;transform:translate(-50%,-25%);transition:top .5s ease-in-out,left .5s ease-in-out,opacity .3s;z-index:5;pointer-events:none;opacity:0}
 .clawhook svg{display:block;width:100%}
 .clawbear{position:absolute;font-size:22%;line-height:1;transform:translate(-50%,-15%);transition:top .5s ease-in-out,left .5s ease-in-out,opacity .3s,transform .3s;z-index:4;pointer-events:none}
@@ -780,8 +780,8 @@ const F={
   charcoal:'#3a434a',steel:'#8a94a0',
 };
 const ICONS={
-  maquina_garra:()=>`<img src="assets/maquina_garra.png" alt="">`,
-  cama_peluches:()=>`<img src="assets/cama_peluches.png" alt="">`,
+  maquina_garra:()=>`<img src="assets/maquina_garra.png" alt="" draggable="false">`,
+  cama_peluches:()=>`<img src="assets/cama_peluches.png" alt="" draggable="false">`,
   sofa:()=>`<svg viewBox="0 0 100 100">
     <rect x="6" y="48" width="18" height="30" rx="7" fill="${F.mustardDark}"/>
     <rect x="76" y="48" width="18" height="30" rx="7" fill="${F.mustardDark}"/>
