@@ -133,6 +133,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .icowrap{display:inline-block;width:1em;height:1em;line-height:1;vertical-align:-0.08em}
 .icowrap svg{display:block;width:100%;height:100%;overflow:visible}
 .icowrap img{display:block;width:100%;height:100%;object-fit:contain}
+.clawhook{position:absolute;width:16%;transform:translate(-50%,-25%);transition:top .5s ease-in-out,left .5s ease-in-out,opacity .3s;z-index:5;pointer-events:none;opacity:0}
+.clawhook svg{display:block;width:100%}
+.clawbear{position:absolute;font-size:22%;line-height:1;transform:translate(-50%,-15%);transition:top .5s ease-in-out,left .5s ease-in-out,opacity .3s,transform .3s;z-index:4;pointer-events:none}
 .room.decor .furn{cursor:grab;touch-action:none}
 .room.decor .furn:hover{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.5) rgba(27,111,180,.75))}
 .room.decor .furn.sel{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
@@ -1355,7 +1358,37 @@ const FURN_BASE=9; // escala general de muebles en la casa (referencia: la masco
 const HOUSE_WIDE=180;
 const HOUSE_SCALE=100/HOUSE_WIDE;
 function remapToWideHouse(x){return 50+(x-50)*HOUSE_SCALE;}
-function furnHTML(f){const it=ITEMS[f.id];if(!it)return '';return `<div class="furn ${selUid===f.uid?'sel':''}" data-uid="${f.uid??''}" style="left:${f.x}%;top:${f.y}%;font-size:calc(var(--u)*${(FURN_BASE*(it.s||1)).toFixed(2)});z-index:${furnZIndex(f)}" title="${it.n}">${itemIcon(f.id)}</div>`;}
+// Tocar la máquina de garra: la garra baja, agarra un peluche, lo sube y lo deja
+// caer en la bandeja de premios. Posiciones en % ajustadas a mano sobre el PNG.
+function clawMachinePlay(el){
+  if(!el||el.dataset.clawing==='1')return;
+  el.dataset.clawing='1';
+  snd('pop');
+  const claw=document.createElement('div');claw.className='clawhook';
+  claw.innerHTML=`<svg viewBox="0 0 40 30"><path d="M20 0 L20 8" stroke="#9aa0a6" stroke-width="3" fill="none"/>
+    <path d="M20 8 Q9 11 11 22 Q15 18 19 16" stroke="#6b7177" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path d="M20 8 Q31 11 29 22 Q25 18 21 16" stroke="#6b7177" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`;
+  claw.style.left='39%';claw.style.top='18%';
+  el.appendChild(claw);
+  requestAnimationFrame(()=>{claw.style.opacity='1';});
+  later(()=>{claw.style.top='45%';},200);
+  later(()=>{
+    const bear=document.createElement('div');bear.className='clawbear';bear.textContent='🧸';
+    bear.style.left='39%';bear.style.top='49%';bear.style.opacity='0';
+    el.appendChild(bear);
+    requestAnimationFrame(()=>{bear.style.opacity='1';});
+    later(()=>{claw.style.top='18%';bear.style.top='22%';},650);
+    later(()=>{claw.style.left='36%';claw.style.top='78%';bear.style.left='36%';bear.style.top='82%';},1150);
+    later(()=>{bear.style.opacity='0';bear.style.transform='translate(-50%,-15%) scale(.3)';claw.style.opacity='0';},1700);
+    later(()=>{
+      bear.remove();claw.remove();delete el.dataset.clawing;
+      const coins=rint(15,40);S.coins+=coins;updateHUD();save();snd('coin');
+      const p=stagePos(el);floatText(p.x,p.y,`🧸 +${coins} 🪙`);
+      toast('¡La garra atrapó un peluche!');
+    },2000);
+  },700);
+}
+function furnHTML(f){const it=ITEMS[f.id];if(!it)return '';return `<div class="furn ${selUid===f.uid?'sel':''}" data-uid="${f.uid??''}" data-id="${f.id}" style="left:${f.x}%;top:${f.y}%;font-size:calc(var(--u)*${(FURN_BASE*(it.s||1)).toFixed(2)});z-index:${furnZIndex(f)}" title="${it.n}">${itemIcon(f.id)}</div>`;}
 function roomHTML(wall,floor,furn,decor,bath){
   return `<div class="room ${decor?'decor':''} ${bath?'bath':''}" id="room">
     <div class="wall" style="background:${wallCss(wall)}"><div class="window w1"></div><div class="window w2"></div><div class="door"></div></div>
@@ -2475,6 +2508,7 @@ stage.addEventListener('pointerdown',e=>{
   if(!S.created)return;
   const f=e.target.closest('.furn');
   if(f&&scene==='house'&&mode==='decor'&&f.dataset.uid){furnPointerDown(e,f);return;}
+  if(f&&scene==='house'&&mode!=='decor'&&f.dataset.id==='maquina_garra'){e.preventDefault();clawMachinePlay(f);return;}
   if(scene==='house'&&mode==='decor'&&e.target.closest('#room')&&!f){selUid=null;document.querySelectorAll('.furn.sel').forEach(x=>x.classList.remove('sel'));const ub=$('[data-act="unplace"]');if(ub)ub.disabled=true;}
   if(e.target.closest('#bjump')){e.preventDefault();raceJump();return;}
   if(e.target.closest('#ljaccelbtn')){e.preventDefault();A.ljAccelDown();return;}
