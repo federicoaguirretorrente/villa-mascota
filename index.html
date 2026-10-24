@@ -486,6 +486,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .addfriend{display:flex;gap:calc(var(--u)*.6);margin-bottom:calc(var(--u)*.8)}
 .addfriend input{flex:1;min-width:0;font:inherit;font-size:calc(var(--u)*1.6);font-weight:800;color:#4a3324;text-transform:uppercase;
   border:calc(var(--u)*.3) solid #9cc9ee;border-radius:calc(var(--u)*1.2);padding:calc(var(--u)*.4) calc(var(--u)*1);background:#fff;letter-spacing:calc(var(--u)*.2)}
+.reqbtns{display:flex;gap:calc(var(--u)*.5);flex-shrink:0}
 
 /* ---------- Collection ---------- */
 .fishgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*12),1fr));gap:calc(var(--u)*1)}
@@ -699,6 +700,60 @@ async function fetchFriend(code){
   if(!fbInit())return null;
   try{const snap=await firebase.firestore().collection('players').doc(code).get();return snap.exists?snap.data():null;}
   catch(e){console.warn('No se pudo buscar ese código',e);return null;}
+}
+// Las solicitudes de amistad son mutuas: B le pide a A, A acepta o rechaza,
+// y recién ahí se agregan como amigos EN LOS DOS juegos.
+let pendingRequests=[];
+function addFriendLocal(code,d,fallbackName){
+  S.friends=S.friends||[];
+  if(S.friends.some(f=>f.code===code))return;
+  S.friends.push({code,name:(d&&d.name)||fallbackName||'Amigo',look:d&&d.pet,outfit:d&&d.outfit,lvl:d&&d.level});
+}
+async function sendFriendRequest(toCode){
+  const myCode=await ensureFriendCode();if(!myCode)return false;
+  const uid=await fbAuth();if(!uid)return false;
+  try{
+    await firebase.firestore().collection('requests').doc(toCode+'__'+myCode).set({
+      toCode,fromCode:myCode,fromUid:uid,fromName:S.pet.name,status:'pending',createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return true;
+  }catch(e){console.warn('No se pudo enviar la solicitud',e);return false;}
+}
+async function checkFriendRequests(){
+  if(!S.friendCode)return;
+  try{
+    const inQ=await firebase.firestore().collection('requests').where('toCode','==',S.friendCode).where('status','==','pending').get();
+    pendingRequests=await Promise.all(inQ.docs.map(async d=>{
+      const r={id:d.id,...d.data()},fd=await fetchFriend(r.fromCode);
+      return{...r,look:fd&&fd.pet,outfit:fd&&fd.outfit,fromName:(fd&&fd.name)||r.fromName};
+    }));
+    refreshNeighborsModal();
+  }catch(e){console.warn('No se pudieron leer las solicitudes',e);}
+  try{
+    const outQ=await firebase.firestore().collection('requests').where('fromCode','==',S.friendCode).where('status','==','accepted').get();
+    let changed=false;
+    for(const docSnap of outQ.docs){
+      const r=docSnap.data(),d=await fetchFriend(r.toCode);
+      if(!(S.friends||[]).some(f=>f.code===r.toCode)){addFriendLocal(r.toCode,d);changed=true;}
+      await docSnap.ref.delete();
+    }
+    if(changed)save();
+  }catch(e){console.warn('No se pudo revisar solicitudes aceptadas',e);}
+  refreshNeighborsModal();
+}
+async function acceptRequest(reqId){
+  const r=pendingRequests.find(x=>x.id===reqId);if(!r)return;
+  const d=await fetchFriend(r.fromCode);
+  addFriendLocal(r.fromCode,d,r.fromName);save();
+  pendingRequests=pendingRequests.filter(x=>x.id!==reqId);
+  refreshNeighborsModal();
+  try{await firebase.firestore().collection('requests').doc(reqId).update({status:'accepted'});}catch(e){console.warn('No se pudo confirmar la solicitud',e);}
+  toast(`¡Ahora son amigos con ${(d&&d.name)||r.fromName||''}!`);
+}
+async function rejectRequest(reqId){
+  pendingRequests=pendingRequests.filter(x=>x.id!==reqId);
+  refreshNeighborsModal();
+  try{await firebase.firestore().collection('requests').doc(reqId).delete();}catch(e){console.warn('No se pudo rechazar',e);}
 }
 
 /* ---------------- ITEM ICONS (ilustraciones vectoriales) ---------------- */
@@ -2125,6 +2180,10 @@ function neighborsHTML(){
     ?`<div class="codebox"><span class="muted">Tu código:</span> <b>${S.friendCode}</b><button class="btn sm" data-act="copyCode">Copiar</button></div>`
     :`<div class="codebox"><span class="muted">Generá un código para que tus amigos puedan visitarte.</span><button class="btn gold sm" data-act="getCode">Generar mi código</button></div>`;
   const addRow=`<div class="addfriend"><input id="friendcodeinput" maxlength="6" placeholder="CÓDIGO"><button class="btn green sm" data-act="addFriendGo">Agregar amigo</button></div>`;
+  const reqs=pendingRequests.length
+    ?`<div class="reqlist">${pendingRequests.map(r=>`<div class="nbrow"><div class="av${r.look?'':' fav'}">${r.look?petSVG(r.look,r.outfit||{},{mood:'happy'}):'👤'}</div><div class="txt"><b>${esc(r.fromName||'Alguien')}</b><span class="muted">Quiere ser tu amigo</span></div>
+      <div class="reqbtns"><button class="btn green sm" data-act="acceptReq" data-arg="${r.id}">Aceptar</button><button class="btn red sm" data-act="rejectReq" data-arg="${r.id}">Rechazar</button></div></div>`).join('')}</div>`
+    :'';
   const friends=(S.friends||[]).length
     ?S.friends.map(f=>`<div class="nbrow"><div class="av${f.look?'':' fav'}">${f.look?petSVG(f.look,f.outfit||{},{mood:'happy'}):'👤'}</div><div class="txt"><b>${esc(f.name)}</b><span class="muted">${f.lvl?`Nivel ${f.lvl}. `:''}Código ${f.code}</span></div>
       <button class="btn green" data-act="visitFriend" data-arg="${f.code}">Visitar</button></div>`).join('')
@@ -2132,7 +2191,7 @@ function neighborsHTML(){
   const nbs=NEIGHBORS.map(nb=>{const v=S.visits[nb.id];const done=v&&v.day===todayStr();
     return `<div class="nbrow"><div class="av">${petSVG(nb.look,nb.outfit,{mood:'happy'})}</div><div class="txt"><b>${nb.name}</b><span class="muted">Nivel ${nb.lvl}. ${done?'Ya la visitaste hoy':'Visita diaria disponible: +25 🪙'}</span></div>
       <button class="btn green" data-act="visit" data-arg="${nb.id}">Visitar</button></div>`;}).join('');
-  return `<div class="nbsection"><h3>Amigos</h3>${mine}${addRow}${friends}</div><div class="nbsection"><h3>Vecinos</h3>${nbs}</div>`;
+  return `<div class="nbsection"><h3>Amigos</h3>${mine}${addRow}${reqs}${friends}</div><div class="nbsection"><h3>Vecinos</h3>${nbs}</div>`;
 }
 async function refreshFriendsAvatars(){
   if(!(S.friends||[]).length)return;
@@ -2347,7 +2406,7 @@ const A={
   useToaster:()=>modal('Tostadora',`<p>¿Qué le agregás a la tostada de ${esc(S.pet.name)}?</p><div class="grid">${TOAST_OPTIONS.map(([k,n])=>`<button class="card" data-act="toastPick" data-arg="${k}"><span class="em">${itemIcon(k)}</span><span class="nm">${n}</span></button>`).join('')}</div>`),
   toastPick:a=>{closeModal();snd('pop');say('¡Tostadas calentitas!');later(()=>eat(a,false),400);},
   // neighbors
-  neighbors:()=>{modal('Vecinos',neighborsHTML());refreshFriendsAvatars();},
+  neighbors:()=>{modal('Vecinos',neighborsHTML());refreshFriendsAvatars();checkFriendRequests();},
   getCode:async()=>{toast('Generando tu código…');const c=await ensureFriendCode();refreshNeighborsModal();toast(c?`¡Tu código es ${c}!`:'No se pudo generar el código. Probá de nuevo.');},
   copyCode:()=>{if(!S.friendCode)return;(navigator.clipboard?.writeText(S.friendCode)||Promise.reject()).then(()=>toast('Código copiado')).catch(()=>toast('Tu código: '+S.friendCode));},
   addFriendGo:async()=>{
@@ -2358,9 +2417,12 @@ const A={
     toast('Buscando…');
     const d=await fetchFriend(code);
     if(!d){toast('No encontramos ese código');return;}
-    S.friends=S.friends||[];S.friends.push({code,name:d.name||'Amigo',look:d.pet,outfit:d.outfit,lvl:d.level});save();
-    refreshNeighborsModal();toast(`¡Agregaste a ${d.name||'tu amigo'}!`);
+    const ok=await sendFriendRequest(code);
+    if(inp)inp.value='';
+    toast(ok?`Solicitud enviada a ${d.name||'tu amigo'}. Se agregan cuando la acepte.`:'No se pudo enviar la solicitud, probá de nuevo');
   },
+  acceptReq:a=>acceptRequest(a),
+  rejectReq:a=>rejectRequest(a),
   visitFriend:async(code)=>{
     toast('Entrando a la casa…');
     const d=await fetchFriend(code);
