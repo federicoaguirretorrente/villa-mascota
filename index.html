@@ -139,7 +139,6 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .room.decor .furn{cursor:grab;touch-action:none}
 .room.decor .furn:hover{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.5) rgba(27,111,180,.75))}
 .room.decor .furn.sel{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
-.room.decor .furn.landing{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #ffcf3a) drop-shadow(0 0 calc(var(--u)*.7) #ffcf3a)}
 .poop{position:absolute;transform:translate(-50%,-100%);background:none;border:0;padding:0;cursor:pointer;font-size:calc(var(--u)*3.2);line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.2))}
 .gift{position:absolute;transform:translate(-50%,-100%);background:none;border:0;cursor:pointer;font-size:calc(var(--u)*5.5);line-height:1;z-index:950;
   filter:drop-shadow(0 0 calc(var(--u)*1.2) #ffe36b);animation:giftBob 1.4s ease-in-out infinite}
@@ -972,45 +971,19 @@ function itemIcon(id){
   return `<span class="icowrap">${draw()}</span>`;
 }
 
-/* ---------------- GRAVEDAD / SUPERFICIES ----------------
-   Los muebles de pared (cuadro, reloj) se cuelgan libremente, sin gravedad.
-   El resto de los muebles cae al piso si se sueltan en el aire; si se sueltan
-   sobre un mueble "superficie" (sofá, cama, silla) quedan apoyados encima,
-   y lo siguen si ese mueble se mueve. */
+/* ---------------- PISO / PARED ----------------
+   Los muebles de pared (cuadro, reloj, estante) se cuelgan libremente, sin
+   restricción de altura. El resto de los muebles debe quedar sobre el piso,
+   pero los objetos pueden superponerse libremente entre sí (sin "engancharse"
+   unos a otros ni arrastrarse en conjunto). */
 const WALL_ITEMS=new Set(['cuadro','reloj','estante']);
-// Muebles grandes: nunca se apoyan sobre otra superficie (p.ej. la cama no entra en el sillón).
-const BIG_ITEMS=new Set(['sofa','cama','castillo','carrusel','barco']);
-const SURFACES={sofa:{lift:22,span:36},cama:{lift:18,span:40},silla:{lift:24,span:18},estante:{lift:17,span:22}};
 // El piso empieza donde termina la pared (ver .floor top:61% / .base top:57.5%): dentro de esa franja hay libertad total.
 const FLOOR_MIN=64,FLOOR_MAX=97;
-function findSurface(x,y,excludeUid){
-  let best=null,bestD=Infinity;
-  for(const p of S.placed){
-    if(p.uid===excludeUid)continue;
-    const cfg=SURFACES[p.id];if(!cfg)continue;
-    const span=cfg.span*HOUSE_SCALE;
-    const dx=Math.abs(x-p.x);if(dx>span)continue;
-    if(y<p.y-cfg.lift-10||y>p.y+6)continue;
-    if(dx<bestD){bestD=dx;best=p;}
-  }
-  return best;
-}
 function settleFurn(f,rawX,rawY){
-  if(WALL_ITEMS.has(f.id)){f.x=rawX;f.y=rawY;f.restingOn=null;return;}
-  const parent=BIG_ITEMS.has(f.id)?null:findSurface(rawX,rawY,f.uid);
-  if(parent){
-    const cfg=SURFACES[parent.id];const span=cfg.span*HOUSE_SCALE;
-    f.restingOn=parent.uid;
-    f.x=clamp(rawX,parent.x-span,parent.x+span);
-    f.y=parent.y-cfg.lift;
-    f._dx=f.x-parent.x;
-  }else{
-    // sin superficie debajo: libertad total sobre el piso, pero nunca "flotando" arriba de donde empieza
-    f.restingOn=null;f.x=rawX;f.y=clamp(rawY,FLOOR_MIN,FLOOR_MAX);
-  }
+  if(WALL_ITEMS.has(f.id)){f.x=rawX;f.y=rawY;return;}
+  f.x=rawX;f.y=clamp(rawY,FLOOR_MIN,FLOOR_MAX);
 }
 function furnZIndex(f){
-  if(f.restingOn){const p=S.placed.find(x=>x.uid===f.restingOn);if(p)return Math.round(p.y*10)+5;}
   return Math.round(f.y*10);
 }
 
@@ -1450,20 +1423,8 @@ function furnPointerMove(e){
   const rawY=clamp((e.clientY-r.top)/r.height*100+drag.dy,14,99);
   settleFurn(f,rawX,rawY);
   el.style.left=f.x+'%';el.style.top=f.y+'%';el.style.zIndex=furnZIndex(f);
-  document.querySelectorAll('.furn.landing').forEach(x=>x.classList.remove('landing'));
-  if(f.restingOn){const pel=document.querySelector(`.furn[data-uid="${f.restingOn}"]`);pel?.classList.add('landing');}
-  // los objetos que ya descansaban sobre este mueble lo siguen al moverlo
-  if(SURFACES[f.id]){
-    const cfg=SURFACES[f.id];const span=cfg.span*HOUSE_SCALE;
-    S.placed.forEach(c=>{
-      if(c.restingOn!==f.uid)return;
-      c.x=clamp(f.x+(c._dx||0),f.x-span,f.x+span);c.y=f.y-cfg.lift;
-      const cel=document.querySelector(`.furn[data-uid="${c.uid}"]`);
-      if(cel){cel.style.left=c.x+'%';cel.style.top=c.y+'%';cel.style.zIndex=Math.round(f.y*10)+5;}
-    });
-  }
 }
-function furnPointerUp(){if(drag){drag.el.style.cursor='';document.querySelectorAll('.furn.landing').forEach(x=>x.classList.remove('landing'));drag=null;save();}}
+function furnPointerUp(){if(drag){drag.el.style.cursor='';drag=null;save();}}
 
 /* ---------------- MAP ---------------- */
 const PLACES=[
@@ -2357,11 +2318,10 @@ const A={
   decorDone:()=>{mode=null;selUid=null;save();render();},
   placeFurn:a=>{if(!(S.inv[a]>0))return;S.inv[a]--;if(S.inv[a]<=0)delete S.inv[a];
     const wall=WALL_ITEMS.has(a);
-    const f={id:a,uid:++S.uid,x:rnd(30,70),y:wall?35:rnd(FLOOR_MIN+6,FLOOR_MAX-4),restingOn:null};
+    const f={id:a,uid:++S.uid,x:rnd(30,70),y:wall?35:rnd(FLOOR_MIN+6,FLOOR_MAX-4)};
     S.placed.push(f);selUid=f.uid;save();snd('pop');render();},
   unplace:()=>{if(!selUid)return;const f=S.placed.find(x=>x.uid===selUid);if(!f)return;
     S.placed=S.placed.filter(x=>x.uid!==selUid);
-    S.placed.forEach(c=>{if(c.restingOn===selUid){c.restingOn=null;c.y=FLOOR_MAX-6;}}); // lo que descansaba encima, cae al piso
     addItem(f.id);selUid=null;save();render();},
   applyWall:a=>{S.wall=a;save();render();},
   applyFloor:a=>{S.floor=a;save();render();},
