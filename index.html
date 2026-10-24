@@ -129,19 +129,19 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .door::after{content:"";position:absolute;right:12%;top:56%;width:calc(var(--u)*1.2);height:calc(var(--u)*1.2);border-radius:50%;background:#f6cf4a;box-shadow:0 1px 0 #9a6a0a}
 .mat{position:absolute;left:calc(50% - var(--u)*9.5);width:calc(var(--u)*19);top:63%;height:7%;background:#e9bd4f;border-radius:calc(var(--u)*.8);border:calc(var(--u)*.35) solid #b9862a;
   display:grid;place-items:center;font-weight:800;color:#7a4e1f;font-size:calc(var(--u)*2);letter-spacing:.12em;z-index:1}
-.furn{position:absolute;transform:translate(-50%,-100%);line-height:1;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18));padding:calc(var(--u)*.2)}
+.furn{position:absolute;transform:translate(-50%,-100%);line-height:1;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18));padding:calc(var(--u)*.2);touch-action:none}
 .icowrap{display:inline-block;width:1em;height:1em;line-height:1;vertical-align:-0.08em}
 .icowrap svg{display:block;width:100%;height:100%;overflow:visible}
 .icowrap img{display:block;width:100%;height:100%;object-fit:contain;-webkit-touch-callout:none;-webkit-user-drag:none;user-select:none;pointer-events:none}
 .clawhook{position:absolute;width:16%;transform:translate(-50%,-25%);transition:top .5s ease-in-out,left .5s ease-in-out,opacity .3s;z-index:5;pointer-events:none;opacity:0}
 .clawhook svg{display:block;width:100%}
 .clawbear{position:absolute;font-size:22%;line-height:1;transform:translate(-50%,-15%);transition:top .5s ease-in-out,left .5s ease-in-out,opacity .3s,transform .3s;z-index:4;pointer-events:none}
-.room.decor .furn{cursor:grab;touch-action:none}
+.room.decor .furn{cursor:grab}
 .room.decor .furn:hover{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.5) rgba(27,111,180,.75))}
 .room.decor .furn.sel{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
 @keyframes furnHold{0%,100%{transform:translate(-50%,-100%) scale(1)}50%{transform:translate(-50%,-100%) scale(1.07)}}
-.room.decor .furn.holding{animation:furnHold .55s ease-in-out infinite;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
-.room.decor .furn.grabbed{transform:translate(-50%,-100%) scale(1.1);filter:drop-shadow(0 calc(var(--u)*.6) 0 rgba(0,0,0,.25)) drop-shadow(0 0 calc(var(--u)*.8) #ffcf3a) drop-shadow(0 0 calc(var(--u)*.8) #ffcf3a)}
+.furn.holding{animation:furnHold .55s ease-in-out infinite;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
+.furn.grabbed{transform:translate(-50%,-100%) scale(1.1);filter:drop-shadow(0 calc(var(--u)*.6) 0 rgba(0,0,0,.25)) drop-shadow(0 0 calc(var(--u)*.8) #ffcf3a) drop-shadow(0 0 calc(var(--u)*.8) #ffcf3a)}
 .poop{position:absolute;transform:translate(-50%,-100%);background:none;border:0;padding:0;cursor:pointer;font-size:calc(var(--u)*3.2);line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.2))}
 .gift{position:absolute;transform:translate(-50%,-100%);background:none;border:0;cursor:pointer;font-size:calc(var(--u)*5.5);line-height:1;z-index:950;
   filter:drop-shadow(0 0 calc(var(--u)*1.2) #ffe36b);animation:giftBob 1.4s ease-in-out infinite}
@@ -1415,19 +1415,29 @@ function decorTrayHTML(){
 }
 let drag=null,holdTimer=null,holdInfo=null;
 const FURN_HOLD_MS=2000;
-function cancelHold(){
+// treatAsTap=true: el toque se soltó antes de los 2s sin moverse casi nada -> cuenta como tap.
+function cancelHold(treatAsTap){
   if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
-  if(holdInfo){holdInfo.el.classList.remove('holding');holdInfo=null;}
+  if(holdInfo){
+    const hi=holdInfo;holdInfo=null;
+    hi.el.classList.remove('holding');
+    if(treatAsTap)hi.tapAct?.();
+  }
 }
-// Tocar un mueble lo selecciona al instante, pero hay que MANTENERLO presionado
-// 2 segundos para que se habilite el arrastre (evita moverlo sin querer al pasar el dedo).
+// Tocar un mueble ya colocado (en la casa, con o sin "Decorar" activo) NO lo mueve al
+// instante: hay que MANTENERLO presionado 2 segundos para habilitar el arrastre (evita
+// moverlo sin querer al pasar el dedo). Un toque corto dispara su interacción normal
+// (p.ej. la máquina de garra) en vez de moverlo.
 function furnPointerDown(e,el){
   const uid=+el.dataset.uid;const f=S.placed.find(x=>x.uid===uid);if(!f)return;
-  e.preventDefault();cancelHold();
-  selUid=uid;document.querySelectorAll('.furn.sel').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
-  const ub=$('[data-act="unplace"]');if(ub)ub.disabled=false;
+  e.preventDefault();cancelHold(false);
+  if(mode==='decor'){
+    selUid=uid;document.querySelectorAll('.furn.sel').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+    const ub=$('[data-act="unplace"]');if(ub)ub.disabled=false;
+  }
   el.classList.add('holding');
-  holdInfo={f,el,x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,pointerId:e.pointerId};
+  holdInfo={f,el,x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,pointerId:e.pointerId,
+    tapAct:(mode!=='decor'&&f.id==='maquina_garra')?()=>clawMachinePlay(el):null};
   holdTimer=setTimeout(()=>{
     if(!holdInfo)return;const hi=holdInfo;holdInfo=null;holdTimer=null;
     hi.el.classList.remove('holding');hi.el.classList.add('grabbed');
@@ -1441,7 +1451,7 @@ function furnPointerDown(e,el){
 function furnPointerMove(e){
   if(holdInfo){
     holdInfo.x=e.clientX;holdInfo.y=e.clientY;
-    if(Math.hypot(e.clientX-holdInfo.x0,e.clientY-holdInfo.y0)>10)cancelHold();
+    if(Math.hypot(e.clientX-holdInfo.x0,e.clientY-holdInfo.y0)>10)cancelHold(false);
     return;
   }
   if(!drag)return;const {f,el,r}=drag;
@@ -1451,7 +1461,7 @@ function furnPointerMove(e){
   el.style.left=f.x+'%';el.style.top=f.y+'%';el.style.zIndex=furnZIndex(f);
 }
 function furnPointerUp(){
-  cancelHold();
+  cancelHold(true);
   if(drag){drag.el.style.cursor='';drag.el.classList.remove('grabbed');drag=null;save();}
 }
 
@@ -2498,8 +2508,7 @@ stage.addEventListener('input',e=>{if(e.target.id==='cname')draft.name=e.target.
 stage.addEventListener('pointerdown',e=>{
   if(!S.created)return;
   const f=e.target.closest('.furn');
-  if(f&&scene==='house'&&mode==='decor'&&f.dataset.uid){furnPointerDown(e,f);return;}
-  if(f&&scene==='house'&&mode!=='decor'&&f.dataset.id==='maquina_garra'){e.preventDefault();clawMachinePlay(f);return;}
+  if(f&&scene==='house'&&mode!=='bath'&&f.dataset.uid){furnPointerDown(e,f);return;}
   if(scene==='house'&&mode==='decor'&&e.target.closest('#room')&&!f){selUid=null;document.querySelectorAll('.furn.sel').forEach(x=>x.classList.remove('sel'));const ub=$('[data-act="unplace"]');if(ub)ub.disabled=true;}
   if(e.target.closest('#bjump')){e.preventDefault();raceJump();return;}
   if(e.target.closest('#ljaccelbtn')){e.preventDefault();A.ljAccelDown();return;}
