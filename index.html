@@ -132,6 +132,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .furn{position:absolute;transform:translate(-50%,-100%);line-height:1;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18));padding:calc(var(--u)*.2)}
 .icowrap{display:inline-block;width:1em;height:1em;line-height:1;vertical-align:-0.08em}
 .icowrap svg{display:block;width:100%;height:100%;overflow:visible}
+.icowrap img{display:block;width:100%;height:100%;object-fit:contain}
 .room.decor .furn{cursor:grab;touch-action:none}
 .room.decor .furn:hover{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.5) rgba(27,111,180,.75))}
 .room.decor .furn.sel{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
@@ -577,6 +578,7 @@ const ITEMS={
   carrusel:{n:'Carrusel',e:'🎠',t:'furn',p:900,s:1.8},
   girasol:{n:'Girasol',e:'🌻',t:'furn',p:80,s:1.3},
   estante:{n:'Estante de pared',e:'📚',t:'furn',shop:'furn',p:140,s:1.5},
+  maquina_garra:{n:'Máquina de garra',e:'🎮',t:'furn',shop:'furn',p:480,s:2.1},
   // Ropa
   hat_straw:{n:'Sombrero de paja',e:'👒',t:'cloth',slot:'hat',shop:'cloth',p:150},
   hat_bow:{n:'Moño rosa',e:'🎀',t:'cloth',slot:'hat',shop:'cloth',p:80},
@@ -771,6 +773,7 @@ const F={
   charcoal:'#3a434a',steel:'#8a94a0',
 };
 const ICONS={
+  maquina_garra:()=>`<img src="assets/maquina_garra.png" alt="">`,
   sofa:()=>`<svg viewBox="0 0 100 100">
     <rect x="6" y="48" width="18" height="30" rx="7" fill="${F.mustardDark}"/>
     <rect x="76" y="48" width="18" height="30" rx="7" fill="${F.mustardDark}"/>
