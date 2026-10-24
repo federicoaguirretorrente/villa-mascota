@@ -139,6 +139,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .room.decor .furn{cursor:grab;touch-action:none}
 .room.decor .furn:hover{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.5) rgba(27,111,180,.75))}
 .room.decor .furn.sel{filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
+@keyframes furnHold{0%,100%{transform:translate(-50%,-100%) scale(1)}50%{transform:translate(-50%,-100%) scale(1.07)}}
+.room.decor .furn.holding{animation:furnHold .55s ease-in-out infinite;filter:drop-shadow(0 calc(var(--u)*.35) 0 rgba(0,0,0,.18)) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4) drop-shadow(0 0 calc(var(--u)*.7) #1b6fb4)}
+.room.decor .furn.grabbed{transform:translate(-50%,-100%) scale(1.1);filter:drop-shadow(0 calc(var(--u)*.6) 0 rgba(0,0,0,.25)) drop-shadow(0 0 calc(var(--u)*.8) #ffcf3a) drop-shadow(0 0 calc(var(--u)*.8) #ffcf3a)}
 .poop{position:absolute;transform:translate(-50%,-100%);background:none;border:0;padding:0;cursor:pointer;font-size:calc(var(--u)*3.2);line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.2))}
 .gift{position:absolute;transform:translate(-50%,-100%);background:none;border:0;cursor:pointer;font-size:calc(var(--u)*5.5);line-height:1;z-index:950;
   filter:drop-shadow(0 0 calc(var(--u)*1.2) #ffe36b);animation:giftBob 1.4s ease-in-out infinite}
@@ -501,6 +504,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 @media (prefers-reduced-motion: reduce){
   .petbody,.gift,.bobber,.plot.ready .plant,.pulse,.bigem{animation:none!important}
   .giftshake,.giftburst::before,.giftburst::after,.card,.card.exclusive{animation:none!important}
+  .furn.holding{animation:none!important}
 }
 </style>
 <div id="app"><div id="stage" role="application" aria-label="Villa Mascota, juego de mascota virtual"></div></div>
@@ -1408,23 +1412,47 @@ function decorTrayHTML(){
   return `<div class="tray panel"><div class="traylist">${cards||'<div class="empty">No tienes muebles guardados. Compra más en la tienda de muebles.</div>'}</div>
     <div class="trayside"><button class="btn red sm" data-act="unplace" ${selUid?'':'disabled'}>Guardar</button><button class="btn green" data-act="decorDone">Listo</button></div></div>`;
 }
-let drag=null;
+let drag=null,holdTimer=null,holdInfo=null;
+const FURN_HOLD_MS=2000;
+function cancelHold(){
+  if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+  if(holdInfo){holdInfo.el.classList.remove('holding');holdInfo=null;}
+}
+// Tocar un mueble lo selecciona al instante, pero hay que MANTENERLO presionado
+// 2 segundos para que se habilite el arrastre (evita moverlo sin querer al pasar el dedo).
 function furnPointerDown(e,el){
   const uid=+el.dataset.uid;const f=S.placed.find(x=>x.uid===uid);if(!f)return;
-  e.preventDefault();selUid=uid;document.querySelectorAll('.furn.sel').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+  e.preventDefault();cancelHold();
+  selUid=uid;document.querySelectorAll('.furn.sel').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
   const ub=$('[data-act="unplace"]');if(ub)ub.disabled=false;
-  const r=$('#room').getBoundingClientRect();
-  const px=(e.clientX-r.left)/r.width*100,py=(e.clientY-r.top)/r.height*100;
-  drag={f,el,r,dx:f.x-px,dy:f.y-py};el.setPointerCapture?.(e.pointerId);el.style.cursor='grabbing';
+  el.classList.add('holding');
+  holdInfo={f,el,x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,pointerId:e.pointerId};
+  holdTimer=setTimeout(()=>{
+    if(!holdInfo)return;const hi=holdInfo;holdInfo=null;holdTimer=null;
+    hi.el.classList.remove('holding');hi.el.classList.add('grabbed');
+    const r=$('#room').getBoundingClientRect();
+    const px=(hi.x-r.left)/r.width*100,py=(hi.y-r.top)/r.height*100;
+    drag={f:hi.f,el:hi.el,r,dx:hi.f.x-px,dy:hi.f.y-py};
+    hi.el.setPointerCapture?.(hi.pointerId);hi.el.style.cursor='grabbing';
+    snd('pop');
+  },FURN_HOLD_MS);
 }
 function furnPointerMove(e){
+  if(holdInfo){
+    holdInfo.x=e.clientX;holdInfo.y=e.clientY;
+    if(Math.hypot(e.clientX-holdInfo.x0,e.clientY-holdInfo.y0)>10)cancelHold();
+    return;
+  }
   if(!drag)return;const {f,el,r}=drag;
   const rawX=clamp((e.clientX-r.left)/r.width*100+drag.dx,3,97);
   const rawY=clamp((e.clientY-r.top)/r.height*100+drag.dy,14,99);
   settleFurn(f,rawX,rawY);
   el.style.left=f.x+'%';el.style.top=f.y+'%';el.style.zIndex=furnZIndex(f);
 }
-function furnPointerUp(){if(drag){drag.el.style.cursor='';drag=null;save();}}
+function furnPointerUp(){
+  cancelHold();
+  if(drag){drag.el.style.cursor='';drag.el.classList.remove('grabbed');drag=null;save();}
+}
 
 /* ---------------- MAP ---------------- */
 const PLACES=[
@@ -2480,7 +2508,7 @@ stage.addEventListener('pointerdown',e=>{
   if(pet&&!mode&&(scene==='house'||scene==='garden'||scene.startsWith('visit:')||scene.startsWith('shop:')||scene==='cafe'||scene==='fish'))petTheP();
   if(mode==='bath')bathMove(e);
 });
-stage.addEventListener('pointermove',e=>{if(drag){furnPointerMove(e);return;}if(pan){roomPanMove(e);return;}if(mode==='bath'&&scene==='house')bathMove(e);});
+stage.addEventListener('pointermove',e=>{if(drag||holdInfo){furnPointerMove(e);return;}if(pan){roomPanMove(e);return;}if(mode==='bath'&&scene==='house')bathMove(e);});
 window.addEventListener('pointerup',()=>{furnPointerUp();roomPanEnd();A.ljAccelUp();});
 window.addEventListener('pointercancel',()=>{furnPointerUp();roomPanEnd();A.ljAccelUp();});
 window.addEventListener('keydown',e=>{
